@@ -110,7 +110,26 @@ class AVLTree {
         return balance_tree(std::move(node));
     }
 
+public:
+    void insert(const T& value) {
+        root = do_insert(std::move(root), value);
+    }
 
+    bool contains(const T& value) const {
+        const Node* current = root.get();
+        while (current) {
+            if (comp(value, current->value)) {
+                current = current->left.get();
+            }
+            else if (comp(current->value, value)) {
+                current = current->right.get();
+            }
+            else {
+                return true;
+            }
+        }
+        return false;
+    }
 };
 
 
