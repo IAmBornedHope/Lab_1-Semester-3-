@@ -65,6 +65,30 @@ class AVLTree {
 
         return new_root;
     }
+
+    std::unique_ptr<Node> balance_tree(std::unique_ptr<Node> root) {
+        if (!root) {
+            return root;
+        }
+        update_height(root.get());
+        int balance = get_balance(root.get());
+
+        if (balance > 1) {
+            if (get_balance(root->left.get()) < 0) {
+                root->left = rotate_left(std::move(root->left));
+            }
+            return rotate_right(std::move(root));
+        }
+
+        if (balance < -1) {
+            if (get_balance(root->right.get()) > 0) {
+                root->right = rotate_right(std::move(root->right));
+            }
+            return rotate_left(std::move(root));
+        }
+
+        return root;
+    }
 };
 
 
