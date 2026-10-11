@@ -89,6 +89,28 @@ class AVLTree {
 
         return root;
     }
+
+    std::unique_ptr<Node> do_insert(std::unique_ptr<Node> node, const T& value) {
+        if (!node) {
+            node = std::make_unique<Node>(value);
+            ++node_count;
+            return node;
+        }
+
+        if (comp(value, node->value)) {
+            node->left = do_insert(std::move(node->left), value);
+        }
+        else if (comp(node->value, value)) {
+            node->right = do_insert(std::move(node->right), value);
+        }
+        else {
+            return node;
+        }
+
+        return balance_tree(std::move(node));
+    }
+
+
 };
 
 
