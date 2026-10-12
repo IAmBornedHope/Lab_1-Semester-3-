@@ -90,29 +90,77 @@ class AVLTree {
         return root;
     }
 
-    std::unique_ptr<Node> do_insert(std::unique_ptr<Node> node, const T& value) {
+    void do_insert(std::unique_ptr<Node>& node, const T& value) {
         if (!node) {
             node = std::make_unique<Node>(value);
             ++node_count;
-            return node;
+            return;
         }
 
         if (comp(value, node->value)) {
-            node->left = do_insert(std::move(node->left), value);
+            do_insert(node->left, value);
         }
         else if (comp(node->value, value)) {
-            node->right = do_insert(std::move(node->right), value);
+            do_insert(node->right, value);
         }
         else {
-            return node;
+            return;
         }
 
-        return balance_tree(std::move(node));
+        node = balance_tree(std::move(node));
+    }
+
+    std::unique_ptr<Node> extract_min(std::unique_ptr<Node>& node) {
+        if (!node->left) {
+            auto min_node = std::move(node);
+            node = std::move(min_node->right);
+            return min_node;
+        }
+
+        auto min_node = extract_min(node->left);
+        node = balance_tree(std::move(node));
+        return min_node;
+    }
+
+    void do_erase(std::unique_ptr<Node>& node, const T& value) {
+        if (!node) {
+            return;
+        }
+        if (comp(value, node->value)) {
+            do_erase(node->left, value);
+        }
+        else if (comp(node->value, value)) {
+            do_erase(node->right, value);
+        }
+        else {
+            --node_count;
+            if (!node->left) {
+                node = std::move(node->right);
+            }
+            else if (!node->right) {
+                node = std::move(node->left);
+            }
+            else {
+                auto successor = extract_min(node->right);
+                successor->left = std::move(node->left);
+                successor->right = std::move(node->right);
+                node = std::move(successor);
+            }
+        }
+        node = balance_tree(std::move(node));
     }
 
 public:
-    void insert(const T& value) {
-        root = do_insert(std::move(root), value);
+    bool insert(const T& value) {
+        size_t before = node_count;
+        do_insert(root, value);
+        return node_count > before;
+    }
+
+    bool erase(const T& value) {
+        size_t before = node_count;
+        do_erase(root, value);
+        return node_count < before;
     }
 
     bool contains(const T& value) const {
@@ -129,6 +177,14 @@ public:
             }
         }
         return false;
+    }
+
+    size_t size() const {
+        return node_count;
+    }
+
+    bool is_empty() const {
+        return node_count == 0;
     }
 };
 
