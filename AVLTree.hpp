@@ -419,7 +419,80 @@ public:
         }
     }
     
+    class AVLTreeIterator : public IEnumerator<T> {
+    private:
+        MutableArraySequence<const Node*> buffer_;
+        const Node* current_;
 
+        void go_left(const Node* node) {
+            while (node) {
+                buffer_.append(node);
+                node = node->left.get();
+            }
+        }
+    public:
+        AVLTreeIterator(const Node* root) : current_(nullptr) {
+            go_left(root);
+            if (buffer_.get_length() > 0) {
+                current_ = buffer_.get(buffer_.get_length() - 1);
+            }
+        }
+
+        const T& get_elem() const override {
+            if (!current_) {
+                throw EmptyListException("AVLTreeIterator (get_elem)");
+            }
+            return current_->value;
+        }
+
+        void next_elem() override {
+            if (buffer_.get_length() == 0) {
+                current_ = nullptr;
+                return;
+            }
+            const Node* node = buffer_.get(buffer_.get_length() - 1);
+            buffer_.pop_back();
+            go_left(node->right.get());
+
+            if (buffer_.get_length() > 0) {
+                current_ = buffer_.get(buffer_.get_length() - 1);
+            }
+            else {
+                current_ = nullptr;
+            }
+        }
+
+        bool is_end() const override {
+            return current_ == nullptr;
+
+        }
+
+        AVLTreeIterator& operator++() {
+            next_elem();
+            return *this;
+        }
+        
+        const T& operator*() const {
+            return get_elem();
+        }
+        
+        bool operator!=(const AVLTreeIterator& other) const {
+            return current_ != other.current_;
+        }
+
+    };
+
+    AVLTreeIterator begin() const {
+        return AVLTreeIterator(root.get());
+    }
+
+    AVLTreeIterator end() const {
+        return AVLTreeIterator(nullptr);
+    }
+
+    IEnumerator<T>* get_enumerator() const {
+        return new AVLTreeIterator(root.get());
+    }
 
 };
 
