@@ -9,13 +9,14 @@
 #include <memory>
 #include <utility>
 
+#include "ICollection.hpp"
 #include "base_structures/array_sequence/ArraySequence.hpp"
 #include "base_structures/array_sequence/MutableArraySequence.hpp"
 #include "base_structures/exceptions/Exceptions.hpp"
 #include "base_structures/sequence/IEnumerator.hpp"
 
 template<typename T, class Comparator = std::less<T>>
-class AVLTree {
+class AVLTree : public ICollection<T> {
 public:
     enum class TraverseOrder {
         KLP,
@@ -260,13 +261,13 @@ public:
         return *this;
     }
 
-    bool insert(const T& value) {
+    bool insert(const T& value) override {
         size_t before = node_count;
         do_insert(root, value);
         return node_count > before;
     }
 
-    bool erase(const T& value) {
+    bool erase(const T& value) override {
         size_t before = node_count;
         do_erase(root, value);
         if (node_count == before) {
@@ -275,7 +276,7 @@ public:
         return true;
     }
 
-    bool contains(const T& value) const {
+    bool contains(const T& value) const override {
         const Node* current = root.get();
         while (current) {
             if (comp(value, current->value)) {
@@ -291,15 +292,15 @@ public:
         return false;
     }
 
-    size_t size() const {
+    size_t size() const override {
         return node_count;
     }
 
-    bool is_empty() const {
+    bool is_empty() const override {
         return node_count == 0;
     }
 
-    void clear() {
+    void clear() override {
         root.reset();
         node_count = 0;
     }
