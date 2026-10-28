@@ -1,12 +1,32 @@
 #pragma once
 
+#include <string>
+#include <sstream>
+#include <stdexcept>
+#include <type_traits>
 #include <functional>
 #include <cstddef>
 #include <memory>
 #include <utility>
 
+#include "base_structures/array_sequence/ArraySequence.hpp"
+#include "base_structures/array_sequence/MutableArraySequence.hpp"
+#include "base_structures/exceptions/Exceptions.hpp"
+#include "base_structures/sequence/IEnumerator.hpp"
+
 template<typename T, class Comparator = std::less<T>>
 class AVLTree {
+public:
+    enum class TraverseOrder {
+        KLP,
+        KPL,
+        LPK,
+        LKP,
+        PLK,
+        PKL
+    };
+
+private:
     struct Node {
         T value;
         std::unique_ptr<Node> left;
@@ -15,6 +35,7 @@ class AVLTree {
         
         explicit Node(const T& v) : value(v), height(1), left(nullptr), right(nullptr) {}
     };
+
 
     std::unique_ptr<Node> root;
     size_t node_count = 0;
@@ -150,7 +171,95 @@ class AVLTree {
         node = balance_tree(std::move(node));
     }
 
+    void preorder(MutableArraySequence<const Node*>& buffer, const Node* node) const {
+        if (!node) {
+            return;
+        }
+        buffer.append(node);
+        preorder(buffer, node->left.get());
+        preorder(buffer, node->right.get());
+    }
+
+    void inorder(MutableArraySequence<const Node*>& buffer, const Node* node) const {
+        if (!node) {
+            return;
+        }
+        inorder(buffer, node->left.get());
+        buffer.append(node);
+        inorder(buffer, node->right.get());
+    }
+
+    void postorder(MutableArraySequence<const Node*>& buffer, const Node* node) const {
+        if (!node) {
+            return;
+        }
+        postorder(buffer, node->left.get());
+        postorder(buffer, node->right.get());
+        buffer.append(node);
+    }
+
+    void build_serialized(const Node* node, TraverseOrder order, std::string& result) const {
+        if (!node) {
+            return;
+        }
+
+        std::ostringstream oss;
+        oss << node->value;
+        std::string middle_part = "{" + oss.str() + "}";
+        
+        std::string left_part;
+        build_serialized(node->left.get(), order, left_part);
+        left_part = "(" + left_part + ")";
+
+        std::string right_part;
+        build_serialized(node->right.get(), order, right_part);
+        right_part = "[" + right_part + "]";
+
+        switch (order) {
+            case TraverseOrder::KLP:
+                result = middle_part + left_part + right_part;
+                break;
+            case TraverseOrder::KPL:
+                result = middle_part + right_part + left_part;
+                break;
+            case TraverseOrder::LKP:
+                result = left_part + middle_part + right_part;
+                break;
+            case TraverseOrder::LPK:
+                result = left_part + right_part + middle_part;
+                break;
+            case TraverseOrder::PKL:
+                result = right_part + middle_part + left_part;
+                break;
+            case TraverseOrder::PLK:
+                result = right_part + left_part + middle_part;
+                break;
+        }
+    }
+
+
 public:
+
+    AVLTree() = default;
+    explicit AVLTree(const Comparator& comparator) : comp(comparator) {}
+
+    AVLTree(const AVLTree&) = delete;
+    AVLTree& operator=(const AVLTree&) = delete;
+
+    AVLTree(AVLTree&& other) : root(std::move(other.root)), node_count(other.node_count), comp(std::move(other.comp)) {
+        other.node_count = 0;
+    }
+
+    AVLTree& operator=(AVLTree&& other) {
+        if (this != &other) {
+            root = std::move(other.root);
+            node_count = other.node_count;
+            comp = std::move(other.comp);
+            other.node_count = 0;
+        }
+        return *this;
+    }
+
     bool insert(const T& value) {
         size_t before = node_count;
         do_insert(root, value);
@@ -160,7 +269,10 @@ public:
     bool erase(const T& value) {
         size_t before = node_count;
         do_erase(root, value);
-        return node_count < before;
+        if (node_count == before) {
+            throw InvalidArgumentException("erase", "Элемент не найден в дереве");
+        }
+        return true;
     }
 
     bool contains(const T& value) const {
@@ -186,6 +298,129 @@ public:
     bool is_empty() const {
         return node_count == 0;
     }
+
+    void clear() {
+        root.reset();
+        node_count = 0;
+    }
+
+    template<class Func>
+    void traverse(TraverseOrder order, Func&& action) const {
+        if (!root) {
+            return;
+        }
+        MutableArraySequence<const Node*> buffer;
+        bool is_reverse = (order == TraverseOrder::KPL || order == TraverseOrder::PKL || order == TraverseOrder::PLK);
+
+        switch (order) {
+            case TraverseOrder::KLP:
+            case TraverseOrder::KPL:
+                preorder(buffer, root.get());
+                break;
+            case TraverseOrder::LKP:
+            case TraverseOrder::PKL:
+                inorder(buffer, root.get());
+                break;
+            case TraverseOrder::LPK:
+            case TraverseOrder::PLK:
+                postorder(buffer, root.get());
+                break;
+        }
+        
+        size_t length = buffer.get_length();
+        if (!is_reverse) {
+            for (size_t index = 0; index < length; ++index) {
+                action(buffer.get(index)->value);
+            }
+        }
+        else {
+            for (size_t index = length; index > 0; --index) {
+                action(buffer.get(index - 1)->value);
+            }
+        }
+
+    }
+
+    AVLTree<T, Comparator> map(T (*func)(T)) const {
+        if (func == nullptr) {
+            throw NullPointerException("func (в map)");
+        }
+        AVLTree<T, Comparator> mapped(comp);
+        traverse(TraverseOrder::LKP, [&mapped, func](const T& value) { mapped.insert(func(value)); });
+        return mapped;
+    }
+
+    AVLTree<T, Comparator> where(bool (*predicate)(T)) const {
+        if (predicate == nullptr) {
+            throw NullPointerException("predicate (в where)");
+        }
+        AVLTree<T, Comparator> filtered(comp);
+        traverse(TraverseOrder::LKP, [&filtered, predicate](const T& value) { if (predicate(value)) filtered.insert(value); });
+        return filtered;
+    }
+
+    T reduce(T (*func)(T, T), T starter) const {
+        if (func == nullptr) {
+            throw NullPointerException("func (в reduce)");
+        }
+        T result = starter;
+        traverse(TraverseOrder::LKP, [&result, func](const T& value) {
+            result = func(result, value);
+        });
+        return result;
+    }
+
+    std::string serialize(TraverseOrder order = TraverseOrder::KLP) const {
+        std::string result;
+        build_serialized(root.get(), order, result);
+        return result;
+    }
+
+    void deserialize(const std::string& str) {
+        clear();
+        if (str.empty()) {
+            return;
+        }
+
+        size_t pos = 0;
+        bool is_found = false;
+
+        while ((pos = str.find('{', pos)) != std::string::npos) {
+            is_found = true;
+            size_t end = str.find('}', pos);
+            
+            if (end == std::string::npos) {
+                throw InvalidArgumentException("Deserialize", "Нет закрывающей '}'");
+            }
+
+            std::string value_str = str.substr(pos + 1, end - pos - 1);
+            
+            if (value_str.empty()) {
+                throw InvalidArgumentException("Deserialize", "Пустые скобки {}");
+            }
+
+            T value;
+            
+            if constexpr (std::is_same_v<T, std::string>) {
+                value = value_str;
+            } else {
+                std::istringstream iss(value_str);
+                if (!(iss >> value)) {
+                    throw InvalidArgumentException("Deserialize", "Неверный формат значения '" + value_str + "'");
+                }
+            }
+
+            insert(value);
+            pos = end + 1;
+        }
+
+        if (!is_found) {
+            throw InvalidArgumentException("Deserialize", "Строка не содержит данных в формате '{...}'");
+        }
+    }
+    
+
+
 };
 
 
