@@ -238,6 +238,17 @@ private:
         }
     }
 
+    bool compare_recursive(const Node* node, const AVLTree& other) const {
+        if (!node) {
+            return true;
+        }
+        
+        if (!other.contains(node->value)) {
+            return false;
+        }
+        
+        return compare_recursive(node->left.get(), other) && compare_recursive(node->right.get(), other);
+    }
 
 public:
 
@@ -303,6 +314,30 @@ public:
     void clear() override {
         root.reset();
         node_count = 0;
+    }
+
+    AVLTree& operator+=(const T& value) {
+        insert(value);
+        return *this;
+    }
+
+    AVLTree& operator-=(const T& value) {
+        if (contains(value)) {
+            erase(value);
+        }
+        return *this;
+    }
+
+    bool operator==(const AVLTree& other) const {
+        if (size() != other.size()) {
+            return false;
+        }
+        
+        return compare_recursive(root.get(), other);
+    }
+
+    bool operator!=(const AVLTree& other) const {
+        return !(*this == other);
     }
 
     template<class Func>
@@ -496,5 +531,11 @@ public:
     }
 
 };
+
+template<typename T, class Comparator>
+std::ostream& operator<<(std::ostream& os, const AVLTree<T, Comparator>& tree) {
+    os << tree.serialize();
+    return os;
+}
 
 
