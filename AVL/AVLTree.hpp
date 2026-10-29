@@ -43,14 +43,14 @@ private:
     Comparator comp;
 
 
-    int get_height(const Node* node) const {
+    static int get_height(const Node* node) {
         if (node) {
             return node->height;
         }
         return 0;
     }
 
-    void update_height(Node* node) {
+    static void update_height(Node* node) {
         int left_height = get_height(node->left.get());
         int right_height = get_height(node->right.get());
 
@@ -62,7 +62,7 @@ private:
         }
     }
 
-    int get_balance(const Node* node) const {
+    static int get_balance(const Node* node) {
         return get_height(node->left.get()) - get_height(node->right.get());
     }
 
@@ -199,7 +199,7 @@ private:
         buffer.append(node);
     }
 
-    void build_serialized(const Node* node, TraverseOrder order, std::string& result) const {
+    static void build_serialized(const Node* node, TraverseOrder order, std::string& result) {
         if (!node) {
             return;
         }
@@ -250,7 +250,18 @@ private:
         return compare_recursive(node->left.get(), other) && compare_recursive(node->right.get(), other);
     }
 
-    void copy_subtree(const Node* node, AVLTree& result) const {
+    static std::unique_ptr<Node> clone(const Node* node) {
+        if (!node) {
+            return nullptr;
+        }
+        auto copy = std::make_unique<Node>(node->value);
+        copy->height = node->height;
+        copy->left = clone(node->left.get());
+        copy->right = clone(node->right.get());
+        return copy;
+    }
+
+    static void copy_subtree(const Node* node, AVLTree& result) {
         if (!node) {
             return;
         }
@@ -264,8 +275,17 @@ public:
     AVLTree() = default;
     explicit AVLTree(const Comparator& comparator) : comp(comparator) {}
 
-    AVLTree(const AVLTree&) = delete;
-    AVLTree& operator=(const AVLTree&) = delete;
+    AVLTree(const AVLTree& other) : root(clone(other.root.get())), node_count(other.node_count), comp(other.comp) {}
+
+    AVLTree& operator=(const AVLTree& other) {
+        if (this != &other) {
+            AVLTree temp(other);
+            root = std::move(temp.root);
+            node_count = temp.node_count;
+            comp = temp.comp;
+        }
+        return *this;
+    }
 
     AVLTree(AVLTree&& other) : root(std::move(other.root)), node_count(other.node_count), comp(std::move(other.comp)) {
         other.node_count = 0;
