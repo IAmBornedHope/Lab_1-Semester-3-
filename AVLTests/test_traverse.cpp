@@ -23,7 +23,7 @@ TEST(TraverseTests, InOrderIsSorted) {
     for (int i = 0; i < 7; ++i) expected_values[i] = expected[i];
     current_index = 0;
 
-    tree.traverse(AVLTree<int>::TraverseOrder::LKP, check_value);
+    tree.traverse(AVLTree<int>::LKP(), check_value);
     EXPECT_EQ(current_index, 7);
 }
 
@@ -39,7 +39,7 @@ TEST(TraverseTests, PreOrder) {
     for (int i = 0; i < 5; ++i) expected_values[i] = expected[i];
     current_index = 0;
 
-    tree.traverse(AVLTree<int>::TraverseOrder::KLP, check_value);
+    tree.traverse(AVLTree<int>::KLP(), check_value);
     EXPECT_EQ(current_index, 5);
 }
 
@@ -55,7 +55,7 @@ TEST(TraverseTests, PostOrder) {
     for (int i = 0; i < 5; ++i) expected_values[i] = expected[i];
     current_index = 0;
 
-    tree.traverse(AVLTree<int>::TraverseOrder::LPK, check_value);
+    tree.traverse(AVLTree<int>::LPK(), check_value);
     EXPECT_EQ(current_index, 5);
 }
 
@@ -73,6 +73,6 @@ TEST(TraverseTests, ReverseInOrderIsDescending) {
     for (int i = 0; i < 7; ++i) expected_values[i] = expected[i];
     current_index = 0;
 
-    tree.traverse(AVLTree<int>::TraverseOrder::PKL, check_value);
+    tree.traverse(AVLTree<int>::PKL(), check_value);
     EXPECT_EQ(current_index, 7);
 }

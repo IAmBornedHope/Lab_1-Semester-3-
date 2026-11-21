@@ -122,8 +122,7 @@ int main() {
         }
         else if (choice == 4) {
             auto order = choose_order();
-            std::cout << "Дерево (строка): " << tree.serialize(order) << "\n";
-            std::cout << "(Скопируйте её для пункта 9, если хотите загрузить обратно)\n";
+                std::cout << "Дерево (строка): " << tree.serialize(order) << "\n";
         }
         else if (choice == 5) {
             std::cout << "Размер: " << tree.size() << "\n";
@@ -136,7 +135,7 @@ int main() {
             DynamicArray<int> data(N); 
             
             std::mt19937 rng(42);
-            std::uniform_int_distribution<int> dist(0, N * 10);
+            std::uniform_int_distribution<int> dist(0, N * 100);
             
             for (int i = 0; i < N; ++i) {
                 data.set(i, dist(rng));

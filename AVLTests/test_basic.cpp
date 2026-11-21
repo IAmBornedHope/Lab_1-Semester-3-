@@ -4,7 +4,7 @@
 TEST(BasicTests, EmptyTree) {
     AVLTree<int> tree;
     EXPECT_TRUE(tree.is_empty());
-    EXPECT_EQ(tree.size(), 0);
+    EXPECT_EQ(tree.size(), 0u);
     EXPECT_FALSE(tree.contains(5));
 }
 
@@ -13,8 +13,8 @@ TEST(BasicTests, InsertAndContains) {
     EXPECT_TRUE(tree.insert(10));
     EXPECT_TRUE(tree.insert(5));
     EXPECT_TRUE(tree.insert(15));
-    
-    EXPECT_EQ(tree.size(), 3);
+
+    EXPECT_EQ(tree.size(), 3u);
     EXPECT_TRUE(tree.contains(10));
     EXPECT_TRUE(tree.contains(5));
     EXPECT_TRUE(tree.contains(15));
@@ -25,7 +25,7 @@ TEST(BasicTests, DuplicateInsert) {
     AVLTree<int> tree;
     EXPECT_TRUE(tree.insert(42));
     EXPECT_FALSE(tree.insert(42));
-    EXPECT_EQ(tree.size(), 1);
+    EXPECT_EQ(tree.size(), 1u);
 }
 
 TEST(BasicTests, Erase) {
@@ -33,10 +33,10 @@ TEST(BasicTests, Erase) {
     for (int i = 1; i <= 5; ++i) {
         tree.insert(i);
     }
-    
+
     EXPECT_TRUE(tree.erase(3));
     EXPECT_FALSE(tree.contains(3));
-    EXPECT_EQ(tree.size(), 4);
+    EXPECT_EQ(tree.size(), 4u);
 }
 
 TEST(BasicTests, EraseNonExistentThrows) {
@@ -51,7 +51,7 @@ TEST(BasicTests, Clear) {
     tree.insert(2);
     tree.clear();
     EXPECT_TRUE(tree.is_empty());
-    EXPECT_EQ(tree.size(), 0);
+    EXPECT_EQ(tree.size(), 0u);
 }
 
 TEST(BasicTests, StringTree) {
@@ -59,10 +59,10 @@ TEST(BasicTests, StringTree) {
     tree.insert("apple");
     tree.insert("mephi");
     tree.insert("lol");
-    
+
     EXPECT_TRUE(tree.contains("apple"));
     EXPECT_FALSE(tree.contains("kaf22"));
-    EXPECT_EQ(tree.size(), 3);
+    EXPECT_EQ(tree.size(), 3u);
 }
 
 TEST(EdgeCases, InsertNegativeNumbers) {
@@ -72,7 +72,7 @@ TEST(EdgeCases, InsertNegativeNumbers) {
     EXPECT_TRUE(tree.insert(0));
     EXPECT_TRUE(tree.insert(10));
 
-    EXPECT_EQ(tree.size(), 4);
+    EXPECT_EQ(tree.size(), 4u);
     EXPECT_TRUE(tree.contains(-10));
     EXPECT_TRUE(tree.contains(0));
     EXPECT_TRUE(tree.contains(10));
@@ -82,11 +82,11 @@ TEST(EdgeCases, InsertNegativeNumbers) {
 TEST(EdgeCases, InsertOneElementAndEraseIt) {
     AVLTree<int> tree;
     tree.insert(42);
-    EXPECT_EQ(tree.size(), 1);
-    
+    EXPECT_EQ(tree.size(), 1u);
+
     EXPECT_TRUE(tree.erase(42));
     EXPECT_TRUE(tree.is_empty());
-    EXPECT_EQ(tree.size(), 0);
+    EXPECT_EQ(tree.size(), 0u);
     EXPECT_FALSE(tree.contains(42));
 }
 
@@ -95,7 +95,7 @@ TEST(EdgeCases, InsertManyDuplicates) {
     for (int i = 0; i < 10; ++i) {
         tree.insert(5);
     }
-    EXPECT_EQ(tree.size(), 1);
+    EXPECT_EQ(tree.size(), 1u);
 }
 
 TEST(EdgeCases, EraseFromEmptyTreeThrows) {
