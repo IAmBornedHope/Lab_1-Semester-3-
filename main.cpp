@@ -17,12 +17,12 @@ void benchmark() {
     for (int s = 0; s < num_sizes; ++s) {
         int N = sizes[s];
         AVLTree<int> tree;
-        
-        DynamicArray<int> data(N); 
-        
+
+        DynamicArray<int> data(N);
+
         std::mt19937 rng(42);
         std::uniform_int_distribution<int> dist(0, N * 100);
-        
+
         for (int i = 0; i < N; ++i) {
             data.set(i, dist(rng));
         }
@@ -48,7 +48,7 @@ void benchmark() {
     }
 }
 
-AVLTree<int>::TraverseOrder choose_order() {
+AVLTree<int>::OrderPolicy choose_order() {
     int choice;
     std::cout << "Выберите обход:\n";
     std::cout << "1. KLP (Корень-Лево-Право)\n";
@@ -61,15 +61,15 @@ AVLTree<int>::TraverseOrder choose_order() {
     std::cin >> choice;
 
     switch (choice) {
-        case 1: return AVLTree<int>::TraverseOrder::KLP;
-        case 2: return AVLTree<int>::TraverseOrder::KPL;
-        case 3: return AVLTree<int>::TraverseOrder::LKP;
-        case 4: return AVLTree<int>::TraverseOrder::LPK;
-        case 5: return AVLTree<int>::TraverseOrder::PKL;
-        case 6: return AVLTree<int>::TraverseOrder::PLK;
-        default: 
+        case 1: return AVLTree<int>::KLP();
+        case 2: return AVLTree<int>::KPL();
+        case 3: return AVLTree<int>::LKP();
+        case 4: return AVLTree<int>::LPK();
+        case 5: return AVLTree<int>::PKL();
+        case 6: return AVLTree<int>::PLK();
+        default:
             std::cout << "Неверный выбор, используется KLP.\n";
-            return AVLTree<int>::TraverseOrder::KLP;
+            return AVLTree<int>::KLP();
     }
 }
 
@@ -122,7 +122,7 @@ int main() {
         }
         else if (choice == 4) {
             auto order = choose_order();
-                std::cout << "Дерево (строка): " << tree.serialize(order) << "\n";
+            std::cout << "Дерево (строка): " << tree.serialize(order) << "\n";
         }
         else if (choice == 5) {
             std::cout << "Размер: " << tree.size() << "\n";
@@ -131,12 +131,12 @@ int main() {
             int N;
             std::cout << "Сколько элементов сгенерировать? ";
             std::cin >> N;
-            
-            DynamicArray<int> data(N); 
-            
+
+            DynamicArray<int> data(N);
+
             std::mt19937 rng(42);
             std::uniform_int_distribution<int> dist(0, N * 100);
-            
+
             for (int i = 0; i < N; ++i) {
                 data.set(i, dist(rng));
             }
@@ -158,7 +158,7 @@ int main() {
         else if (choice == 9) {
             std::string str;
             std::cout << "Введите строку (например, {5}({3}()[])[{7}()[]]): ";
-            std::cin.ignore(); 
+            std::cin.ignore();
             std::getline(std::cin, str);
             try {
                 tree.deserialize(str);
