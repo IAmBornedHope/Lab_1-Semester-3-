@@ -8,7 +8,6 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../extern/googletest"
                  EXCLUDE_FROM_ALL)
 
 add_executable(avl_test
-                main_test.cpp
                 test_basic.cpp
                 test_balance.cpp
                 test_traverse.cpp
