@@ -17,15 +17,66 @@
 
 template<typename T, class Comparator = std::less<T>>
 class AVLTree : public ICollection<T> {
+
 public:
-    enum class TraverseOrder {
-        KLP,
-        KPL,
-        LPK,
-        LKP,
-        PLK,
-        PKL
+    enum class PartKind { Root, Child };
+    struct Part {
+        PartKind kind;
+        size_t child_index;
+        static Part root() 
+        { 
+            return { PartKind::Root, 0 }; 
+        }
+
+        static Part child(size_t i) 
+        { 
+            return { PartKind::Child, i }; 
+        }
     };
+    using OrderPolicy = MutableArraySequence<Part>;
+
+    static OrderPolicy KLP() {
+        OrderPolicy p;
+        p.append(Part::root());
+        p.append(Part::child(0));
+        p.append(Part::child(1));
+        return p;
+    }
+    static OrderPolicy KPL() {
+        OrderPolicy p;
+        p.append(Part::root());
+        p.append(Part::child(1));
+        p.append(Part::child(0));
+        return p;
+    }
+    static OrderPolicy LKP() {
+        OrderPolicy p;
+        p.append(Part::child(0));
+        p.append(Part::root());
+        p.append(Part::child(1));
+        return p;
+    }
+    static OrderPolicy LPK() {
+        OrderPolicy p;
+        p.append(Part::child(0));
+        p.append(Part::child(1));
+        p.append(Part::root());
+        return p;
+    }
+    static OrderPolicy PKL() {
+        OrderPolicy p;
+        p.append(Part::child(1));
+        p.append(Part::root());
+        p.append(Part::child(0));
+        return p;
+    }
+    static OrderPolicy PLK() {
+        OrderPolicy p;
+        p.append(Part::child(1));
+        p.append(Part::child(0));
+        p.append(Part::root());
+        return p;
+    }
 
 private:
     struct Node {
@@ -172,34 +223,35 @@ private:
         node = balance_tree(std::move(node));
     }
 
-    void preorder(MutableArraySequence<const Node*>& buffer, const Node* node) const {
+    template<class Func>
+    static void traverse_node(const Node* node, OrderPolicy policy, Func&& action) {
         if (!node) {
             return;
         }
-        buffer.append(node);
-        preorder(buffer, node->left.get());
-        preorder(buffer, node->right.get());
-    }
 
-    void inorder(MutableArraySequence<const Node*>& buffer, const Node* node) const {
-        if (!node) {
-            return;
+        for (const Part& p : policy) {
+            switch (p.kind) {
+                case PartKind::Root:
+                    action(node->value);
+                    break;
+
+                case PartKind::Child: {
+                    const Node* child = nullptr;
+
+                    if (p.child_index == 0) {
+                        child = node->left.get();
+                    } else {
+                        child = node->right.get();
+                    }
+
+                    traverse_node(child, policy, action);
+                    break;
+                }
+            }
         }
-        inorder(buffer, node->left.get());
-        buffer.append(node);
-        inorder(buffer, node->right.get());
     }
 
-    void postorder(MutableArraySequence<const Node*>& buffer, const Node* node) const {
-        if (!node) {
-            return;
-        }
-        postorder(buffer, node->left.get());
-        postorder(buffer, node->right.get());
-        buffer.append(node);
-    }
-
-    static void build_serialized(const Node* node, TraverseOrder order, std::string& result) {
+    static void build_serialized(const Node* node, OrderPolicy& order, std::string& result) {
         if (!node) {
             return;
         }
@@ -207,37 +259,42 @@ private:
         std::ostringstream oss;
         oss << node->value;
         std::string middle_part = "{" + oss.str() + "}";
-        
-        std::string left_part;
-        build_serialized(node->left.get(), order, left_part);
-        left_part = "(" + left_part + ")";
 
-        std::string right_part;
-        build_serialized(node->right.get(), order, right_part);
-        right_part = "[" + right_part + "]";
+        if (!node->left && !node->right) {
+            result += middle_part;
+            return;
+        }
 
-        switch (order) {
-            case TraverseOrder::KLP:
-                result = middle_part + left_part + right_part;
-                break;
-            case TraverseOrder::KPL:
-                result = middle_part + right_part + left_part;
-                break;
-            case TraverseOrder::LKP:
-                result = left_part + middle_part + right_part;
-                break;
-            case TraverseOrder::LPK:
-                result = left_part + right_part + middle_part;
-                break;
-            case TraverseOrder::PKL:
-                result = right_part + middle_part + left_part;
-                break;
-            case TraverseOrder::PLK:
-                result = right_part + left_part + middle_part;
-                break;
+        std::string left_raw;
+        build_serialized(node->left.get(), order, left_raw);
+
+        std::string right_raw;
+        build_serialized(node->right.get(), order, right_raw);
+
+        for (const Part& p : order) {
+            switch (p.kind) {
+                case PartKind::Root:
+                    result += middle_part;
+                    break;
+
+                case PartKind::Child:
+                    if (p.child_index == 0) {
+                        if (!node->left) {
+                            result += "()";
+                        } else {
+                            result += "(" + left_raw + ")";
+                        }
+                    } else {
+                        if (!node->right) {
+                            result += "[]";
+                        } else {
+                            result += "[" + right_raw + "]";
+                        }
+                    }
+                    break;
+            }
         }
     }
-
     bool compare_recursive(const Node* node, const AVLTree& other) const {
         if (!node) {
             return true;
@@ -370,48 +427,18 @@ public:
     }
 
     template<class Func>
-    void traverse(TraverseOrder order, Func&& action) const {
-        if (!root) {
-            return;
-        }
-        MutableArraySequence<const Node*> buffer;
-        bool is_reverse = (order == TraverseOrder::KPL || order == TraverseOrder::PKL || order == TraverseOrder::PLK);
-
-        switch (order) {
-            case TraverseOrder::KLP:
-            case TraverseOrder::KPL:
-                preorder(buffer, root.get());
-                break;
-            case TraverseOrder::LKP:
-            case TraverseOrder::PKL:
-                inorder(buffer, root.get());
-                break;
-            case TraverseOrder::LPK:
-            case TraverseOrder::PLK:
-                postorder(buffer, root.get());
-                break;
-        }
-        
-        size_t length = buffer.get_length();
-        if (!is_reverse) {
-            for (size_t index = 0; index < length; ++index) {
-                action(buffer.get(index)->value);
-            }
-        }
-        else {
-            for (size_t index = length; index > 0; --index) {
-                action(buffer.get(index - 1)->value);
-            }
-        }
-
+    void traverse(const OrderPolicy& policy, Func&& action) const {
+        traverse_node(root.get(), policy, action);
     }
+
+        
 
     AVLTree<T, Comparator> map(T (*func)(T)) const {
         if (func == nullptr) {
             throw NullPointerException("func (в map)");
         }
         AVLTree<T, Comparator> mapped(comp);
-        traverse(TraverseOrder::LKP, [&mapped, func](const T& value) { mapped.insert(func(value)); });
+        traverse(LKP(), [&mapped, func](const T& value) { mapped.insert(func(value)); });
         return mapped;
     }
 
@@ -420,7 +447,7 @@ public:
             throw NullPointerException("predicate (в where)");
         }
         AVLTree<T, Comparator> filtered(comp);
-        traverse(TraverseOrder::LKP, [&filtered, predicate](const T& value) { if (predicate(value)) filtered.insert(value); });
+        traverse(LKP(), [&filtered, predicate](const T& value) { if (predicate(value)) filtered.insert(value); });
         return filtered;
     }
 
@@ -429,13 +456,13 @@ public:
             throw NullPointerException("func (в reduce)");
         }
         T result = starter;
-        traverse(TraverseOrder::LKP, [&result, func](const T& value) {
+        traverse(LKP(), [&result, func](const T& value) {
             result = func(result, value);
         });
         return result;
     }
 
-    std::string serialize(TraverseOrder order = TraverseOrder::KLP) const {
+    std::string serialize(OrderPolicy order = KLP()) const {
         std::string result;
         build_serialized(root.get(), order, result);
         return result;
@@ -485,79 +512,131 @@ public:
     }
     
     class AVLTreeIterator : public IEnumerator<T> {
-    private:
-        MutableArraySequence<const Node*> buffer_;
-        const Node* current_;
+        private:
+            struct Snapshot {
+                MutableArraySequence<T> buffer;
+            };
 
-        void go_left(const Node* node) {
-            while (node) {
-                buffer_.append(node);
-                node = node->left.get();
+            std::shared_ptr<const Snapshot> snapshot_;
+            std::size_t index_ = 0;
+
+            mutable std::optional<T> current_cache_;
+
+            static void collect(const std::unique_ptr<Node>& node, OrderPolicy policy, MutableArraySequence<T>& out) {
+                if (!node) {
+                    return;
+                }
+
+                for (const Part& part : policy) {
+                    switch (part.kind) {
+                        case PartKind::Root: {
+                            out.append(node->value);
+                            break;
+                        }
+                        case PartKind::Child: {
+                            if (part.child_index == 0) {
+                                collect(node->left, policy, out);
+                            } else {
+                                collect(node->right, policy, out);
+                            }
+                            break;
+                        }
+                        default: {
+                            throw InvalidArgumentException("AVLIterator", "Некорректный обход");
+                        }
+                    }
+                }
             }
-        }
-    public:
-        AVLTreeIterator(const Node* root) : current_(nullptr) {
-            go_left(root);
-            if (buffer_.get_length() > 0) {
-                current_ = buffer_.get(buffer_.get_length() - 1);
+
+
+
+        public:
+            AVLTreeIterator() = default;
+            
+            explicit AVLTreeIterator(const std::unique_ptr<Node>& root, const OrderPolicy& policy) {
+                auto snapshot = std::make_shared<Snapshot>();
+                collect(root, policy, snapshot->buffer);
+                snapshot_ = std::move(snapshot);
             }
-        }
+            AVLTreeIterator(const AVLTreeIterator& other) : snapshot_(other.snapshot_), index_(other.index_) {}
 
-        const T& get_elem() const override {
-            if (!current_) {
-                throw EmptyListException("AVLTreeIterator (get_elem)");
+            AVLTreeIterator& operator=(const AVLTreeIterator& other) {
+                if (this != &other) {
+                    current_cache_.reset();
+                    snapshot_ = other.snapshot_;
+                    index_ = other.index_;
+                }
+                return *this;
             }
-            return current_->value;
-        }
 
-        void next_elem() override {
-            if (buffer_.get_length() == 0) {
-                current_ = nullptr;
-                return;
+            AVLTreeIterator(AVLTreeIterator&& other) noexcept : snapshot_(std::move(other.snapshot_)), index_(other.index_) {
+                other.index_ = 0;
+                other.current_cache_.reset();
             }
-            const Node* node = buffer_.get(buffer_.get_length() - 1);
-            buffer_.pop_back();
-            go_left(node->right.get());
 
-            if (buffer_.get_length() > 0) {
-                current_ = buffer_.get(buffer_.get_length() - 1);
+            AVLTreeIterator& operator=(AVLTreeIterator&& other) noexcept {
+                if (this != &other) {
+                    current_cache_.reset();
+                    snapshot_ = std::move(other.snapshot_);
+                    index_ = other.index_;
+                    other.index_ = 0;
+                    other.current_cache_.reset();
+                }
+                return *this;
             }
-            else {
-                current_ = nullptr;
+
+            const T& get_elem() const override {
+                if (is_end()) {
+                    throw IndexOutOfRangeException("В AVLIterator нет элемента (get_elem)");
+                }
+                if (!current_cache_) {
+                    current_cache_.emplace(snapshot_->buffer.get(index_));
+                }
+                return *current_cache_;
             }
+
+            void next_elem() override {
+                if (!is_end()) {
+                    current_cache_.reset();
+                    ++index_;
+                }
+            }
+
+            bool is_end() const override {
+                return !snapshot_ || index_ >= snapshot_->buffer.get_length();
+            }
+
+            AVLTreeIterator& operator++() {
+                next_elem();
+                return *this;
+            }
+
+            const T& operator*() const { return get_elem(); }
+
+            bool operator==(const AVLTreeIterator& other) const {
+                if (is_end() || other.is_end()) {
+                    return is_end() && other.is_end();
+                }
+                return snapshot_ == other.snapshot_ && index_ == other.index_;
+            }
+
+            bool operator!=(const AVLTreeIterator& other) const {
+                return !(*this == other);
+            }
+        };
+
+        AVLTreeIterator begin(const OrderPolicy& policy = KLP()) const {
+            return AVLTreeIterator(root, policy);
         }
 
-        bool is_end() const override {
-            return current_ == nullptr;
-
+        AVLTreeIterator end() const {
+            return AVLTreeIterator();
         }
 
-        AVLTreeIterator& operator++() {
-            next_elem();
-            return *this;
-        }
-        
-        const T& operator*() const {
-            return get_elem();
-        }
-        
-        bool operator!=(const AVLTreeIterator& other) const {
-            return current_ != other.current_;
+        std::unique_ptr<IEnumerator<T>> get_enumerator(const OrderPolicy& policy = KLP()) const {
+            return std::make_unique<AVLTreeIterator>(begin(policy));
         }
 
-    };
-
-    AVLTreeIterator begin() const {
-        return AVLTreeIterator(root.get());
-    }
-
-    AVLTreeIterator end() const {
-        return AVLTreeIterator(nullptr);
-    }
-
-    IEnumerator<T>* get_enumerator() const {
-        return new AVLTreeIterator(root.get());
-    }
 
     AVLTree<T, Comparator> get_subtree(const T& value) const {
         const Node* current = root.get();
