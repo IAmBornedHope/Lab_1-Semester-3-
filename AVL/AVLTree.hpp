@@ -92,6 +92,7 @@ private:
     std::unique_ptr<Node> root;
     size_t node_count = 0;
     Comparator comp;
+    std::shared_ptr<const int> lifetime_ = std::make_shared<const int>(0);
 
 
     static int get_height(const Node* node) {
@@ -512,130 +513,157 @@ public:
     }
     
     class AVLTreeIterator : public IEnumerator<T> {
-        private:
-            struct Snapshot {
-                MutableArraySequence<T> buffer;
-            };
+    private:
+        struct Frame {
+            const Node* node = nullptr;
+            size_t next_part = 0;
+        };
 
-            std::shared_ptr<const Snapshot> snapshot_;
-            std::size_t index_ = 0;
+        OrderPolicy policy_;
+        MutableArraySequence<Frame> stack_;
+        const Node* current_ = nullptr;
 
-            mutable std::optional<T> current_cache_;
+        std::weak_ptr<const int> lifetime_;
+        bool has_tree_ = false;
 
-            static void collect(const std::unique_ptr<Node>& node, OrderPolicy policy, MutableArraySequence<T>& out) {
-                if (!node) {
+        void check_lifetime() const {
+            if (has_tree_ && lifetime_.expired()) {
+                throw IteratorPointerException("AVLIterator: Дерево удалено");
+            }
+        }
+
+    public:
+        AVLTreeIterator() = default;
+
+        explicit AVLTreeIterator(const std::unique_ptr<Node>& root, const OrderPolicy& policy, const std::shared_ptr<const int>& lifetime) 
+        : policy_(policy), lifetime_(lifetime), has_tree_(true) {
+            if (policy_.get_length() != 3) {
+                throw InvalidArgumentException("AVLIterator", "Обход должен содержать 3 части");
+            }
+
+            bool seen[3] = {false, false, false};
+
+            for (const Part& part : policy_) {
+                size_t index = 0;
+
+                if (part.kind == PartKind::Child && part.child_index < 2) {
+                    index = part.child_index + 1;
+                } else if (part.kind != PartKind::Root) {
+                    throw InvalidArgumentException("AVLIterator", "Некорректный обход");
+                }
+
+                if (seen[index]) {
+                    throw InvalidArgumentException("AVLIterator", "Повторная часть обхода");
+                }
+
+                seen[index] = true;
+            }
+
+            if (root) {
+                stack_.append(Frame{root.get(), 0});
+            }
+
+            next_elem();
+        }
+
+        const T& get_elem() const override {
+            check_lifetime();
+
+            if (is_end()) {
+                throw IndexOutOfRangeException("get_elem: Нет такого элемента");
+            }
+
+            return current_->value;
+        }
+
+        void next_elem() override {
+            check_lifetime();
+            current_ = nullptr;
+
+            while (stack_.get_length() > 0) {
+                Frame& frame = stack_[stack_.get_length() - 1];
+
+                if (frame.next_part == policy_.get_length()) {
+                    stack_.pop_back();
+                    continue;
+                }
+
+                const Node* node = frame.node;
+                const Part& part = policy_[frame.next_part++];
+
+                if (part.kind == PartKind::Root) {
+                    current_ = node;
                     return;
                 }
 
-                for (const Part& part : policy) {
-                    switch (part.kind) {
-                        case PartKind::Root: {
-                            out.append(node->value);
-                            break;
-                        }
-                        case PartKind::Child: {
-                            if (part.child_index == 0) {
-                                collect(node->left, policy, out);
-                            } else {
-                                collect(node->right, policy, out);
-                            }
-                            break;
-                        }
-                        default: {
-                            throw InvalidArgumentException("AVLIterator", "Некорректный обход");
-                        }
-                    }
+                const Node* child = nullptr;
+
+                if (part.child_index == 0) {
+                    child = node->left.get();
+                } else {
+                    child = node->right.get();
+                }
+
+                if (child) {
+                    stack_.append(Frame{child, 0});
                 }
             }
-
-
-
-        public:
-            AVLTreeIterator() = default;
-            
-            explicit AVLTreeIterator(const std::unique_ptr<Node>& root, const OrderPolicy& policy) {
-                auto snapshot = std::make_shared<Snapshot>();
-                collect(root, policy, snapshot->buffer);
-                snapshot_ = std::move(snapshot);
-            }
-            AVLTreeIterator(const AVLTreeIterator& other) : snapshot_(other.snapshot_), index_(other.index_) {}
-
-            AVLTreeIterator& operator=(const AVLTreeIterator& other) {
-                if (this != &other) {
-                    current_cache_.reset();
-                    snapshot_ = other.snapshot_;
-                    index_ = other.index_;
-                }
-                return *this;
-            }
-
-            AVLTreeIterator(AVLTreeIterator&& other) noexcept : snapshot_(std::move(other.snapshot_)), index_(other.index_) {
-                other.index_ = 0;
-                other.current_cache_.reset();
-            }
-
-            AVLTreeIterator& operator=(AVLTreeIterator&& other) noexcept {
-                if (this != &other) {
-                    current_cache_.reset();
-                    snapshot_ = std::move(other.snapshot_);
-                    index_ = other.index_;
-                    other.index_ = 0;
-                    other.current_cache_.reset();
-                }
-                return *this;
-            }
-
-            const T& get_elem() const override {
-                if (is_end()) {
-                    throw IndexOutOfRangeException("В AVLIterator нет элемента (get_elem)");
-                }
-                if (!current_cache_) {
-                    current_cache_.emplace(snapshot_->buffer.get(index_));
-                }
-                return *current_cache_;
-            }
-
-            void next_elem() override {
-                if (!is_end()) {
-                    current_cache_.reset();
-                    ++index_;
-                }
-            }
-
-            bool is_end() const override {
-                return !snapshot_ || index_ >= snapshot_->buffer.get_length();
-            }
-
-            AVLTreeIterator& operator++() {
-                next_elem();
-                return *this;
-            }
-
-            const T& operator*() const { return get_elem(); }
-
-            bool operator==(const AVLTreeIterator& other) const {
-                if (is_end() || other.is_end()) {
-                    return is_end() && other.is_end();
-                }
-                return snapshot_ == other.snapshot_ && index_ == other.index_;
-            }
-
-            bool operator!=(const AVLTreeIterator& other) const {
-                return !(*this == other);
-            }
-        };
-
-        AVLTreeIterator begin(const OrderPolicy& policy = KLP()) const {
-            return AVLTreeIterator(root, policy);
         }
 
-        AVLTreeIterator end() const {
-            return AVLTreeIterator();
+        bool is_end() const override {
+            check_lifetime();
+            return current_ == nullptr;
         }
 
-        std::unique_ptr<IEnumerator<T>> get_enumerator(const OrderPolicy& policy = KLP()) const {
-            return std::make_unique<AVLTreeIterator>(begin(policy));
+        AVLTreeIterator& operator++() {
+            next_elem();
+            return *this;
         }
+
+        const T& operator*() const {
+            return get_elem();
+        }
+
+        bool operator==(const AVLTreeIterator& other) const {
+            check_lifetime();
+            other.check_lifetime();
+
+            if (current_ != other.current_) {
+                return false;
+            }
+
+            if (is_end()) {
+                return true;
+            }
+
+            for (size_t index = 0; index < policy_.get_length(); ++index) {
+                const Part& first = policy_.get_reference(index);
+                const Part& second = other.policy_.get_reference(index);
+
+                if (first.kind != second.kind || first.child_index != second.child_index) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        bool operator!=(const AVLTreeIterator& other) const {
+            return !(*this == other);
+        }
+    };
+
+    AVLTreeIterator begin(const OrderPolicy& policy = KLP()) const {
+        return AVLTreeIterator(root, policy, lifetime_);
+    }
+
+    AVLTreeIterator end() const {
+        return AVLTreeIterator();
+    }
+
+    std::unique_ptr<IEnumerator<T>> get_enumerator(const OrderPolicy& policy = KLP()) const {
+        return std::make_unique<AVLTreeIterator>(begin(policy));
+    }
 
 
     AVLTree<T, Comparator> get_subtree(const T& value) const {
